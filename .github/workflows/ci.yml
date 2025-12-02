@@ -1,0 +1,44 @@
+name: CI/CD Pipeline
+
+on:
+  pull_request:
+    branches: [ dev, main ]
+
+jobs:
+  quality-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+        # Falha se houver erros de estilo
+
+      - name: Test & Coverage
+        run: npm test -- --coverage
+      
+      - name: Check Coverage Threshold
+        run: |
+          # Exemplo simples de verificação (Gate de 70%)
+          node -e "const cv = require('./coverage/summary.json'); if(cv.total.lines.pct < 70) process.exit(1);"
+
+      - name: SAST Security Check
+        uses: github/codeql-action/analyze@v3
+        # Configurado para falhar em issues HIGH/CRITICAL
+
+  build:
+    needs: quality-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build Docker Image
+        run: docker build -t app:${{ github.sha }} .
+      
+      - name: Save Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: Dockerfile
